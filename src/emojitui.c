@@ -14,13 +14,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define VERSION "0.5a"
-
-#define ABOUT_WINDOW_HEIGHT 10
-#define ABOUT_WINDOW_WIDTH 40
-#define SEARCH_WINDOW_HEIGHT 20
-#define SEARCH_WINDOW_WIDTH 80
-
 void draw_menu(int highlight, int start_col, char **menu_choices,
                int menu_choices_count) {
   for (int i = 0; i < menu_choices_count; ++i) {
@@ -73,8 +66,8 @@ void about_window(void) {
             (win_width - strlen("Copyright (C) 2024 kernaltrap8")) / 2,
             "Copyright (C) 2024 kernaltrap8");
   mvwprintw(info_win, 3,
-            (win_width - strlen("Licensed under BSD-2-Clause")) / 2,
-            "Licensed under BSD-2-Clause");
+            (win_width - strlen("Licensed under BSD-3-Clause")) / 2,
+            "Licensed under BSD-3-Clause");
 
   // Create OK button
   mvwprintw(info_win, win_height - 2, (win_width - 6) / 2, "[ OK ]");

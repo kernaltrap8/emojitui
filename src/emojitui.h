@@ -27,4 +27,12 @@ char *edit_menu_choices[] = {"About"};
 const char *emoji_list[] = {"smile", "wink", "thumbs up", "heart",
                             "laugh", "cry",  "angry",     "surprised"};
 #define EMOJI_LIST_SIZE (sizeof(emoji_list) / sizeof(emoji_list[0]))
+
+#define VERSION "0.5c"
+
+#define ABOUT_WINDOW_HEIGHT 10
+#define ABOUT_WINDOW_WIDTH 40
+#define SEARCH_WINDOW_HEIGHT 20
+#define SEARCH_WINDOW_WIDTH 80
+
 #endif
