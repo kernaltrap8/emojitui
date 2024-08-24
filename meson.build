@@ -4,4 +4,4 @@ project('emojitui', 'c',
 
 executable('emojitui',
            'src/emojitui.c',
-           install : true, link_args : ['-lncurses', '-ltinfo'])
+           install : true, link_args : ['-lncurses', '-ltinfo', '-lX11'])

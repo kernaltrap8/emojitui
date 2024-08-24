@@ -8,11 +8,63 @@
 */
 
 #include "emojitui.h"
+#include <X11/Xatom.h>
+#include <X11/Xlib.h>
 #include <ctype.h>
 #include <ncurses.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+
+ActiveView current_view = MAIN_VIEW;
+
+int detect_desktop_environment(void) {
+  char *wayland = getenv("WAYLAND_DISPLAY");
+  char *x11 = getenv("DISPLAY");
+
+  if (!wayland && x11) {
+    return X11;
+  } else if (wayland) {
+    return WAYLAND;
+  }
+  return -1;
+}
+
+void x11_copy_to_clip(const char *text) {
+  Display *display = XOpenDisplay(NULL);
+  if (display == NULL) {
+    fprintf(stderr, "Unable to open X display\n");
+    exit(EXIT_FAILURE);
+  }
+
+  // Get the clipboard atom
+  Atom clipboard = XInternAtom(display, "CLIPBOARD", False);
+  Atom utf8_string = XInternAtom(display, "UTF8_STRING", False);
+
+  // Create a new window for the clipboard
+  Window window = XCreateSimpleWindow(display, DefaultRootWindow(display), 0, 0,
+                                      1, 1, 0, CopyFromParent, CopyFromParent);
+  XSelectInput(display, window, 0);
+  XMapWindow(display, window);
+
+  // Set the clipboard content
+  XSetSelectionOwner(display, clipboard, window, CurrentTime);
+  if (XGetSelectionOwner(display, clipboard) != window) {
+    fprintf(stderr, "Failed to set clipboard owner\n");
+    XCloseDisplay(display);
+    exit(EXIT_FAILURE);
+  }
+
+  // Set the property with the clipboard text
+  XChangeProperty(display, window, clipboard, utf8_string, 8, PropModeReplace,
+                  (unsigned char *)text, strlen(text));
+
+  // Flush and close the display
+  XFlush(display);
+  XCloseDisplay(display);
+}
 
 void draw_menu(int highlight, int start_col, char **menu_choices,
                int menu_choices_count) {
@@ -35,7 +87,40 @@ void clear_menu(int start_col, int menu_choices_count) {
   attroff(COLOR_PAIR(2)); // Turn off the color pair after clearing
 }
 
+void handle_resize() {
+  int row, col;
+  getmaxyx(stdscr, row, col); // Get new screen dimensions
+
+  clear();   // Clear the screen
+  refresh(); // Refresh the screen
+
+  switch (current_view) {
+  case MAIN_VIEW:
+    // Redraw the main view
+    attron(COLOR_PAIR(1));
+    mvhline(0, 0, ' ', col);          // Fill the top line with spaces
+    mvprintw(0, 0, "emojitui alpha"); // Banner text
+    mvprintw(0, 20, "File");          // File option
+    mvprintw(0, 27, "Edit");          // Edit option
+
+    mvhline(row - 1, 0, ' ', col);
+    mvprintw(row - 1, (col - 16) / 2, "Press F1 to Exit");
+
+    refresh(); // Refresh the screen to apply changes
+    break;
+
+  case ABOUT_VIEW:
+    about_window(); // Redraw the about window
+    break;
+
+  case SEARCH_VIEW:
+    search_window(); // Redraw the search window
+    break;
+  }
+}
+
 void about_window(void) {
+  current_view = ABOUT_VIEW;
   int row, col;
   getmaxyx(stdscr, row, col); // Get screen dimensions
 
@@ -95,6 +180,8 @@ void about_window(void) {
   }
   attroff(COLOR_PAIR(2)); // Turn off the background color pair
 
+  current_view = MAIN_VIEW;
+
   // Refresh the main screen to clear the old window area
   refresh(); // Ensure the screen updates
 }
@@ -116,7 +203,25 @@ void redraw_black_bar(WINDOW *win, int middle_row, int bar_start_x,
   wattroff(win, COLOR_PAIR(2)); // Turn off color pair after use
 }
 
+void searchAndOutput(char *input, char *searchArray[], char *outputArray[],
+                     int size) {
+  int found = 0;
+
+  for (int i = 0; i < size; i++) {
+    if (strcmp(input, searchArray[i]) == 0) {
+      printf("The color of %s is %s.\n", input, outputArray[i]);
+      found = 1;
+      break;
+    }
+  }
+
+  if (!found) {
+    printf("Item not found.\n");
+  }
+}
+
 void search_window(void) {
+  current_view = SEARCH_VIEW;
   int row, col;
   getmaxyx(stdscr, row, col); // Get screen dimensions
 
@@ -207,10 +312,26 @@ void search_window(void) {
 
   // Perform search only when Enter key is pressed
   int index = search_emoji(query);
-  mvwprintw(search_win, middle_row + 2, 1, "Search result: ");
   if (index != -1) {
-    mvwprintw(search_win, middle_row + 3, 1, "Found '%s' at index %d",
-              emoji_list[index], index);
+    // mvwprintw(search_win, middle_row + 3, 1, "Found result: %s",
+    // emojis[index]);
+    int env = detect_desktop_environment();
+    if (env == WAYLAND) {
+      char cmd[100];
+      snprintf(cmd, sizeof(cmd), "echo -n '%s' | wl-copy", emojis[index]);
+      if (system(cmd) == -1) {
+        mvwprintw(search_win, middle_row + 3, 1,
+                  "Emoji wasn't copied to the clipboard. Sorry.");
+      } else {
+        mvwprintw(search_win, middle_row + 3, 1,
+                  "Copied to the clipboard (wayland).");
+      }
+    }
+    if (env == X11) {
+      x11_copy_to_clip(emojis[index]);
+      mvwprintw(search_win, middle_row + 3, 1,
+                "Copied to the clipboard (X11).");
+    }
   } else {
     mvwprintw(search_win, middle_row + 3, 1, "No match found for '%s'", query);
   }
@@ -237,6 +358,8 @@ void search_window(void) {
   }
   attroff(COLOR_PAIR(2)); // Turn off the background color pair
 
+  current_view = MAIN_VIEW;
+
   // Refresh the main screen to clear the old window area
   refresh(); // Ensure the screen updates
 }
@@ -254,6 +377,8 @@ void init_screen(void) {
     init_pair(3, COLOR_BLACK, COLOR_WHITE); // For dropdown menu background
     init_pair(4, COLOR_BLACK, COLOR_WHITE); // For highlighted text
   }
+
+  signal(SIGWINCH, handle_resize);
 
   int row, col;
   getmaxyx(stdscr, row, col);
@@ -395,6 +520,10 @@ void init_screen(void) {
 }
 
 int main(void) {
+  if (detect_desktop_environment() == -1) {
+    printf("Sorry, I cant detect your desktop environment.\n");
+    exit(1);
+  }
   init_screen();
   return 0;
 }
