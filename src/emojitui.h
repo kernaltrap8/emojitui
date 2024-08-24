@@ -34,7 +34,7 @@ char *edit_menu_choices[] = {"About"};
 
 const char *emoji_list[] = {"smile", "wink", "thumbs up", "heart",
                             "laugh", "cry",  "angry",     "surprised"};
-const char *emojis[] = {"😊", "😉", "👍" "❤️","😂", "😢", "😠", "😲"};
+const char *emojis[] = {"😊", "😉", "👍", "❤️","😂",  "😢", "😠", "😲"};
 #define EMOJI_LIST_SIZE (sizeof(emoji_list) / sizeof(emoji_list[0]))
 
 #define VERSION "0.6"
